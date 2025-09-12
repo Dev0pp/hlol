@@ -124,66 +124,38 @@
 </div>
 
 <script>
-  const modal = document.getElementById("userModal");
-  const form = document.getElementById("userForm");
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.querySelector("form"); // خذ الفورم الموجود عندك
+  if (!form) return;
 
-  document.getElementById("addUserBtn").onclick = () => modal.classList.remove("hidden");
-  document.getElementById("cancelBtn").onclick = () => modal.classList.add("hidden");
-
-  async function loadUsers() {
-    const res = await fetch('/users');
-    const users = await res.json();
-    const tbody = document.querySelector("#usersTable tbody");
-    tbody.innerHTML = "";
-    users.forEach(user => {
-      const tr = document.createElement("tr");
-      tr.className = "border-b hover:bg-gray-50";
-      tr.innerHTML = `
-        <td class="px-4 py-2">${user.id}</td>
-        <td class="px-4 py-2">${user.serial}</td>
-        <td class="px-4 py-2"><a href="/uploads/${user.file}" target="_blank" class="text-blue-500 hover:underline">عرض</a></td>
-        <td class="px-4 py-2 text-blue-500 cursor-pointer" onclick="alert('ميزة التعديل لم تُفعل بعد')">تعديل</td>
-        <td class="px-4 py-2 text-red-500 cursor-pointer" onclick="deleteUser('${user.id}', '${user.serial}')">حذف</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-
-  async function deleteUser(id, serial) {
-    if (!confirm("هل أنت متأكد من حذف المستخدم؟")) return;
-    await fetch('/delete-user', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ id, serial })
-    });
-    loadUsers();
-  }
-
-  form.onsubmit = async (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const id = document.getElementById("identityInput").value;
-    const serial = document.getElementById("serialInput").value;
-    const file = document.getElementById("fileInput").files[0];
-    if (!/\d{10}/.test(id)) return alert("رقم الهوية يجب أن يكون 10 أرقام.");
-    if (!/\d+/.test(serial)) return alert("الرقم التسلسلي يجب أن يكون أرقام فقط.");
-    if (!file) return alert("يرجى اختيار ملف.");
 
-    const formData = new FormData();
-    formData.append("id", id);
-    formData.append("serial", serial);
-    formData.append("file", file);
+    // خذ القيم من الحقول (بدون تغيير أسمائها أو تنسيقها)
+    const nationalId = form.querySelector("input[name='nationalnumber']").value;
+    const serial = form.querySelector("input[name='certificatenumber']").value;
 
-    await fetch('/upload', {
-      method: 'POST',
-      body: formData
+    // طلب تحقق من السيرفر
+    const res = await fetch("/api/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nationalId, serial })
     });
+    const data = await res.json();
 
-    modal.classList.add("hidden");
-    form.reset();
-    loadUsers();
-  };
-
-  window.onload = loadUsers;
+    if (data.exists) {
+      // عرض رابط التحميل بنفس التصميم (ممكن يكون زر أو لينك تحت الفورم)
+      const btn = document.createElement("a");
+      btn.href = data.downloadUrl;
+      btn.target = "_blank";
+      btn.textContent = "📄 تحميل الشهادة";
+      btn.className = "bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded mt-4 inline-block"; 
+      form.insertAdjacentElement("afterend", btn);
+    } else {
+      alert("❌ البيانات غير صحيحة أو غير موجودة في النظام");
+    }
+  });
+});
 </script>
 </body>
 </html>
