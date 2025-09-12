@@ -36,9 +36,7 @@ function saveRecords(recs) {
 const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
 function normalize(s = '') {
   if (!s) return '';
-  // حوّل الأرقام العربية إلى إنجليزية
   s = String(s).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
-  // فقط احذف المسافات الزايدة، لا تمسح الحروف أو الرموز كلها
   return s.trim();
 }
 
@@ -52,17 +50,23 @@ const upload = multer({
 });
 app.use('/uploads', express.static(STORAGE_DIR));
 
-// API: create/update certificate
+/* ========== API ========== */
+
+// إنشاء أو تحديث شهادة
 app.post('/api/certificates', upload.single('pdf'), (req, res) => {
   try {
-    const nationalId = normalize(req.body.nationalId);
-    const serial     = normalize(req.body.serial);
+    // هنا الحقول الجديدة من الفورم
+    const nationalId = normalize(req.body.nationalnumber);
+    const serial     = normalize(req.body.certificatenumber);
+
     if (!nationalId || !serial || !req.file) {
       if (req.file) fs.unlinkSync(path.join(STORAGE_DIR, req.file.filename));
       return res.status(400).json({ error: 'بيانات ناقصة' });
     }
+
     const recs = loadRecords();
     const idx = recs.findIndex(r => r.nationalId === nationalId && r.serial === serial);
+
     if (idx >= 0) {
       if (recs[idx].pdfKey && recs[idx].pdfKey !== req.file.filename) {
         const old = path.join(STORAGE_DIR, path.basename(recs[idx].pdfKey));
@@ -85,14 +89,13 @@ app.post('/api/certificates', upload.single('pdf'), (req, res) => {
   }
 });
 
-// API: lookup (يتحقق من بيانات الهوية + التسلسلي)
-// API: lookup (يتحقق من بيانات الهوية + التسلسلي)
+// التحقق (lookup)
 app.post('/api/lookup', (req, res) => {
   const nationalId = normalize(
-    req.body?.nationalId || req.body?.id || req.body?.identity || req.body?.iqama || req.body?.nid
+    req.body?.nationalnumber || req.body?.id || req.body?.nid
   );
   const serial = normalize(
-    req.body?.serial || req.body?.sn || req.body?.code || req.body?.certificateSerial
+    req.body?.certificatenumber || req.body?.serial || req.body?.sn
   );
 
   if (!nationalId || !serial) return res.status(400).json({ error: 'بيانات ناقصة' });
@@ -108,9 +111,9 @@ app.post('/api/lookup', (req, res) => {
   const base = (process.env.SELF_BASE_URL || '').replace(/\/$/, '');
   const url = `${base}/files/${rec.id}?t=${encodeURIComponent(token)}`;
   res.json({ exists: true, downloadUrl: url });
-}); // ← إغلاق واحد فقط
+});
 
-// Serve file with short-lived token
+// عرض الملفات مع توكن مؤقت
 app.get('/files/:id', (req, res) => {
   try {
     const t = req.query.t;
@@ -137,29 +140,32 @@ app.get('/files/:id', (req, res) => {
     res.status(500).send('Server error');
   }
 });
-// === توافق مع واجهة dashboard.html ===
 
-// 1) قائمة المستخدمين للجدول
+/* ========== Dashboard Compatibility ========== */
+
+// قائمة المستخدمين
 app.get('/users', (req, res) => {
   const recs = loadRecords();
-  // تُعيد: رقم الهوية، التسلسلي، واسم الملف لروابط "عرض"
   const users = recs
     .filter(r => r.active)
     .map(r => ({ id: r.nationalId, serial: r.serial, file: r.pdfKey }));
   res.json(users);
 });
 
-// 2) رفع ملف وربطه بالهوية/التسلسلي (نفس منطق /api/certificates لكن بأسماء الحقول في الواجهة)
+// رفع من واجهة الداشبورد
 app.post('/upload', upload.single('file'), (req, res) => {
   try {
     const nationalId = normalize(req.body.id);
     const serial     = normalize(req.body.serial);
+
     if (!nationalId || !serial || !req.file) {
       if (req.file) fs.unlinkSync(path.join(STORAGE_DIR, req.file.filename));
       return res.status(400).json({ error: 'بيانات ناقصة' });
     }
+
     const recs = loadRecords();
     const idx = recs.findIndex(r => r.nationalId === nationalId && r.serial === serial);
+
     if (idx >= 0) {
       if (recs[idx].pdfKey && recs[idx].pdfKey !== req.file.filename) {
         const old = path.join(STORAGE_DIR, path.basename(recs[idx].pdfKey));
@@ -179,10 +185,11 @@ app.post('/upload', upload.single('file'), (req, res) => {
   }
 });
 
-// 3) حذف مستخدم (والملف إن وُجد)
+// حذف مستخدم
 app.post('/delete-user', (req, res) => {
-  const nationalId = normalize(req.body?.id || req.body?.nationalId || req.body?.identity || req.body?.iqama || req.body?.nid);
-  const serial     = normalize(req.body?.serial || req.body?.sn || req.body?.code || req.body?.certificateSerial);
+  const nationalId = normalize(req.body?.id || req.body?.nationalId || req.body?.nid);
+  const serial     = normalize(req.body?.serial || req.body?.certificatenumber);
+
   if (!nationalId || !serial) return res.status(400).json({ error: 'بيانات ناقصة' });
 
   const recs = loadRecords();
@@ -194,37 +201,12 @@ app.post('/delete-user', (req, res) => {
   recs.splice(idx, 1);
   saveRecords(recs);
   res.json({ ok: true });
-
-}); // ← إغلاق واحد فقط
-
-// --- Static: keep your original frontend untouched ---
-const STATIC_DIR = path.join(__dirname, 'public'); // project root
-app.use(express.static(STATIC_DIR));
-// محاولة ذكية لإيجاد الملفات لو المسارات داخل dashboard.html قديمة/مختلفة
-
-app.use((req, res, next) => {
-  // عالج طلبات الملفات فقط (GET بلا استعلامات API)
-  if (req.method !== 'GET') return next();
-  if (req.path.startsWith('/api/') || req.path.startsWith('/files/')) return next();
-  if (req.path === '/' || req.path === '/dashboard.html' || req.path === '/index.html') return next();
-
-  // مرشّحات المسارات البديلة المحتملة — بدون تغيير الواجهة
-  const candidates = [
-    path.join(STATIC_DIR, req.path),                                   // المسار الحالي
-    path.join(STATIC_DIR, 'rajhi', req.path),                           // لو الملفات داخل public/rajhi/...
-    path.join(STATIC_DIR, 'dashboard-panel-main', 'public', req.path),  // هيكل قديم محتمل
-    path.join(STATIC_DIR, req.path.replace(/^\/dashboard\//, '')),      // لو الواجهة كانت تتحمّل من /dashboard/...
-  ];
-
-  for (const abs of candidates) {
-    try {
-      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
-        return res.sendFile(abs);
-      }
-    } catch {}
-  }
-  return next(); // لو ما وجدنا شيء، كمّل للـ 404 أو للروتات الأخرى
 });
+
+/* ========== Static ========== */
+const STATIC_DIR = path.join(__dirname, 'public');
+app.use(express.static(STATIC_DIR));
+
 app.get('/', (req, res) => res.sendFile(path.join(STATIC_DIR, 'index.html')));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path.startsWith('/files/')) return next();
