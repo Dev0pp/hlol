@@ -34,11 +34,13 @@ function saveRecords(recs) {
 }
 
 const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-const normalize = (s='') => {
-  s = String(s).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)); // يحول الأرقام العربية لإنجليزية
-  s = s.replace(/\D+/g, ''); // يحذف أي شيء غير رقم (مسافات، - ، . إلخ)
+function normalize(s = '') {
+  if (!s) return '';
+  // حوّل الأرقام العربية إلى إنجليزية
+  s = String(s).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
+  // فقط احذف المسافات الزايدة، لا تمسح الحروف أو الرموز كلها
   return s.trim();
-};
+}
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, STORAGE_DIR),
