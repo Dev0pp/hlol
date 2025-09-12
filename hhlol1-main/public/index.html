@@ -986,6 +986,33 @@ var flatsomeVars = {"theme":{"version":"3.19.12"},"ajaxurl":"https:\/\/riyadonli
 /* ]]> */
 </script>
 <script type="text/javascript" src="https://riyadonline.click/wp-content/themes/flatsome/assets/js/flatsome.js?ver=e1ad26bd5672989785e1" id="flatsome-js-js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("verifyForm");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault(); // يمنع الإرسال العادي
+
+    const nationalId = form.querySelector("input[name='nationalnumber']").value;
+    const serial = form.querySelector("input[name='certificatenumber']").value;
+
+    const res = await fetch("/api/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nationalId, serial })
+    });
+    const data = await res.json();
+
+    if (data.exists) {
+      // فتح الملف PDF إذا البيانات صحيحة
+      window.open(data.downloadUrl, "_blank");
+    } else {
+      alert("❌ البيانات غير صحيحة أو غير موجودة");
+    }
+  });
+});
+</script>
 
 
 
