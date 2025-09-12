@@ -187,6 +187,34 @@ window._wpemojiSettings = {"baseUrl":"https:\/\/s.w.org\/images\/core\/emoji\/16
 </style>
 </head>
 <body class="rtl wp-singular page-template page-template-page-blank page-template-page-blank-php page page-id-28 page-child parent-pageid-26 wp-theme-flatsome wp-child-theme-flatsome-child lightbox nav-dropdown-has-arrow nav-dropdown-has-shadow nav-dropdown-has-border">
+<!-- قسم التحقق -->
+<form id="verifyForm" class="space-y-4">
+  <div>
+    <label class="block mb-1 font-medium">رقم الهوية</label>
+    <input 
+      type="text" 
+      name="nationalnumber" 
+      required 
+      class="w-full border rounded-lg p-2"
+      placeholder="أدخل رقم الهوية"
+    />
+  </div>
+  <div>
+    <label class="block mb-1 font-medium">الرقم التسلسلي</label>
+    <input 
+      type="text" 
+      name="certificatenumber" 
+      required 
+      class="w-full border rounded-lg p-2"
+      placeholder="أدخل الرقم التسلسلي"
+    />
+  </div>
+  <button 
+    type="submit" 
+    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+    تحقق
+  </button>
+</form>
 
 
 <a class="skip-link screen-reader-text" href="#main">تخطي للمحتوى</a>
