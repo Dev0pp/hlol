@@ -34,19 +34,26 @@ document.getElementById("verifyForm").onsubmit = async function(e) {
     serial: form.certificatenumber.value
   };
 
-  const res = await fetch("/api/lookup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
+  try {
+    const res = await fetch("/api/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
 
-  const result = await res.json();
+    const result = await res.json();
 
-  if (result.exists) {
-    const base = window.location.origin;
-    window.open(base + result.downloadUrl, "_blank");
-  } else {
-    alert("❌ الوثيقة غير صحيحة أو غير موجودة");
+    if (result.exists) {
+      // ادمج الدومين مع الرابط عشان يفتح
+      const base = window.location.origin;
+      const fullUrl = base + result.downloadUrl;
+      window.open(fullUrl, "_blank");
+    } else {
+      alert("❌ البيانات غير صحيحة أو غير موجودة.");
+    }
+  } catch (err) {
+    console.error("Lookup error:", err);
+    alert("حصل خطأ في الاتصال بالسيرفر.");
   }
 };
 </script>
