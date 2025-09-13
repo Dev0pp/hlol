@@ -497,13 +497,29 @@ window._wpemojiSettings = {"baseUrl":"https:\/\/s.w.org\/images\/core\/emoji\/16
         .required-asterisk {
             color: red;
         }
-    </style><div class="custom-form">
-            <form method="post">
-                <label>رقم المرجع <span class="required-asterisk">*</span><input type="text" name="reference_number" required=""></label>
-                <label>ادخال رقم الهوية/الإقامة او الرقم الموحد للشركات <span class="required-asterisk">*</span><input type="text" name="national_id" required=""></label>
-                <input type="submit" name="submit_check" value="تحقق">
-                <div class="result"></div> <!-- عرض النتيجة أسفل الزر -->
-            </form></div>
+    </style>
+<div class="custom-form">
+  <form id="verifyForm" method="POST" action="/api/lookup">
+    <label>رقم الهوية <span class="required-asterisk">*</span></label>
+    <input
+      type="text"
+      name="nationalId"
+      required
+      placeholder="أدخل رقم الهوية"
+    />
+
+    <label>الرقم المرجعي <span class="required-asterisk">*</span></label>
+    <input
+      type="text"
+      name="serial"
+      required
+      placeholder="أدخل الرقم المرجعي"
+    />
+
+    <input type="submit" value="تحقّق" />
+    <div class="result"></div>
+  </form>
+</div>
 
 		
 <style>
