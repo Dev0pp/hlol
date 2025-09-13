@@ -1,219 +1,106 @@
-require('dotenv').config();
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const cors = require('cors');
-const multer = require('multer');
-const crypto = require('crypto');
+const express = require("express");
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
-app.use(cors({ origin: [process.env.PUBLIC_SITE_ORIGIN].filter(Boolean) }));
-app.use(express.json({ limit: '2mb' }));
-app.use(rateLimit({ windowMs: 15*60*1000, max: 600 }));
-app.use(express.urlencoded({ extended: true })); // يدعم الفورم FormData
+const PORT = process.env.PORT || 3000;
 
-// Storage
-const STORAGE_DIR = process.env.STORAGE_DIR || '/data/edocs';
-const RECORDS_PATH = path.join(STORAGE_DIR, 'records.json');
-if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
-if (!fs.existsSync(RECORDS_PATH)) fs.writeFileSync(RECORDS_PATH, '[]', 'utf8');
-
-function loadRecords() {
-  try { return JSON.parse(fs.readFileSync(RECORDS_PATH, 'utf8')); } catch { return []; }
-}
-function saveRecords(recs) {
-  const tmp = RECORDS_PATH + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(recs, null, 2), 'utf8');
-  fs.renameSync(tmp, RECORDS_PATH);
+// مجلد التخزين
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR);
 }
 
-const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-function normalize(s = '') {
-  if (!s) return '';
-  s = String(s).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
-  return s.trim();
-}
-
+// إعداد multer لرفع الملفات
 const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, STORAGE_DIR),
-  filename: (_, __, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.pdf`)
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const uniqueName =
+      Date.now() + "-" + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
+    cb(null, uniqueName);
+  },
 });
-const upload = multer({
-  storage,
-  fileFilter: (_, file, cb) => cb(null, file.mimetype === 'application/pdf')
+const upload = multer({ storage });
+
+// قاعدة بيانات مصغرة (JSON)
+const DB_FILE = path.join(__dirname, "db.json");
+if (!fs.existsSync(DB_FILE)) {
+  fs.writeFileSync(DB_FILE, JSON.stringify([]));
+}
+
+// قراءة/كتابة JSON
+function readDB() {
+  return JSON.parse(fs.readFileSync(DB_FILE));
+}
+function writeDB(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
+
+// ميدل وير
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/uploads", express.static(UPLOADS_DIR));
+
+/**
+ * API رفع ملف + إضافة مستخدم
+ */
+app.post("/upload", upload.single("file"), (req, res) => {
+  const { id, serial } = req.body;
+  const file = req.file;
+
+  if (!id || !serial || !file) {
+    return res.status(400).json({ error: "البيانات ناقصة" });
+  }
+
+  const db = readDB();
+  db.push({ id, serial, file: file.filename });
+  writeDB(db);
+
+  res.json({ success: true, message: "تم الحفظ بنجاح" });
 });
-app.use('/uploads', express.static(STORAGE_DIR));
 
-/* ========== API ========== */
+/**
+ * API جلب المستخدمين (للدashboard)
+ */
+app.get("/users", (req, res) => {
+  const db = readDB();
+  res.json(db);
+});
 
-// إنشاء أو تحديث شهادة
-app.post('/api/certificates', upload.single('pdf'), (req, res) => {
-  try {
-    // هنا الحقول الجديدة من الفورم
-    const nationalId = normalize(req.body.nationalnumber);
-    const serial     = normalize(req.body.certificatenumber);
+/**
+ * API حذف مستخدم
+ */
+app.post("/delete-user", (req, res) => {
+  const { id, serial } = req.body;
+  let db = readDB();
+  db = db.filter((u) => !(u.id === id && u.serial === serial));
+  writeDB(db);
+  res.json({ success: true });
+});
 
-    if (!nationalId || !serial || !req.file) {
-      if (req.file) fs.unlinkSync(path.join(STORAGE_DIR, req.file.filename));
-      return res.status(400).json({ error: 'بيانات ناقصة' });
-    }
+/**
+ * API تحقق من الهوية + الرقم المرجعي
+ */
+app.post("/api/lookup", (req, res) => {
+  const { nationalId, serial } = req.body;
+  const db = readDB();
 
-    const recs = loadRecords();
-    const idx = recs.findIndex(r => r.nationalId === nationalId && r.serial === serial);
+  const found = db.find((u) => u.id === nationalId && u.serial === serial);
 
-    if (idx >= 0) {
-      if (recs[idx].pdfKey && recs[idx].pdfKey !== req.file.filename) {
-        const old = path.join(STORAGE_DIR, path.basename(recs[idx].pdfKey));
-        if (fs.existsSync(old)) fs.unlink(old, () => {});
-      }
-      recs[idx].pdfKey = req.file.filename;
-      recs[idx].active = true;
-      recs[idx].updatedAt = Date.now();
-      saveRecords(recs);
-      return res.json({ ok: true, id: recs[idx].id });
-    } else {
-      const id = crypto.randomUUID();
-      recs.push({ id, nationalId, serial, pdfKey: req.file.filename, active: true, createdAt: Date.now() });
-      saveRecords(recs);
-      return res.json({ ok: true, id });
-    }
-  } catch (e) {
-    if (req.file) fs.unlink(path.join(STORAGE_DIR, req.file.filename), () => {});
-    return res.status(500).json({ error: e.message });
+  if (found) {
+    return res.json({
+      exists: true,
+      downloadUrl: `/uploads/${found.file}`,
+    });
+  } else {
+    return res.json({ exists: false });
   }
 });
 
-// التحقق (lookup)
-app.post('/api/lookup', (req, res) => {
-  const nationalId = normalize(
-    req.body?.nationalnumber || req.body?.id || req.body?.nid
-  );
-  const serial = normalize(
-    req.body?.certificatenumber || req.body?.serial || req.body?.sn
-  );
-
-  if (!nationalId || !serial) return res.status(400).json({ error: 'بيانات ناقصة' });
-
-  const recs = loadRecords();
-  const rec = recs.find(r => r.nationalId === nationalId && r.serial === serial && r.active);
-  if (!rec) return res.json({ exists: false });
-
-  const token = Buffer.from(JSON.stringify({
-    id: rec.id, ts: Date.now(), nonce: crypto.randomBytes(6).toString('hex')
-  })).toString('base64url');
-
-  const base = (process.env.SELF_BASE_URL || '').replace(/\/$/, '');
-  const url = `${base}/files/${rec.id}?t=${encodeURIComponent(token)}`;
-  res.json({ exists: true, downloadUrl: url });
+// تشغيل السيرفر
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
-
-// عرض الملفات مع توكن مؤقت
-app.get('/files/:id', (req, res) => {
-  try {
-    const t = req.query.t;
-    if (!t) return res.status(403).send('Forbidden');
-
-    let payload;
-    try { payload = JSON.parse(Buffer.from(String(t), 'base64url').toString()); }
-    catch { return res.status(403).send('Invalid token'); }
-
-    if (payload.id !== req.params.id) return res.status(403).send('Forbidden');
-    if (Date.now() - Number(payload.ts) > 2*60*1000) return res.status(403).send('Link expired');
-
-    const recs = loadRecords();
-    const rec = recs.find(r => r.id === req.params.id && r.active);
-    if (!rec) return res.status(404).send('Not found');
-
-    const abs = path.join(STORAGE_DIR, path.basename(rec.pdfKey));
-    if (!fs.existsSync(abs)) return res.status(404).send('File missing');
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="document.pdf"');
-    fs.createReadStream(abs).pipe(res);
-  } catch (e) {
-    res.status(500).send('Server error');
-  }
-});
-
-/* ========== Dashboard Compatibility ========== */
-
-// قائمة المستخدمين
-app.get('/users', (req, res) => {
-  const recs = loadRecords();
-  const users = recs
-    .filter(r => r.active)
-    .map(r => ({ id: r.nationalId, serial: r.serial, file: r.pdfKey }));
-  res.json(users);
-});
-
-// رفع من واجهة الداشبورد
-app.post('/upload', upload.single('file'), (req, res) => {
-  try {
-    const nationalId = normalize(req.body.id);
-    const serial     = normalize(req.body.serial);
-
-    if (!nationalId || !serial || !req.file) {
-      if (req.file) fs.unlinkSync(path.join(STORAGE_DIR, req.file.filename));
-      return res.status(400).json({ error: 'بيانات ناقصة' });
-    }
-
-    const recs = loadRecords();
-    const idx = recs.findIndex(r => r.nationalId === nationalId && r.serial === serial);
-
-    if (idx >= 0) {
-      if (recs[idx].pdfKey && recs[idx].pdfKey !== req.file.filename) {
-        const old = path.join(STORAGE_DIR, path.basename(recs[idx].pdfKey));
-        if (fs.existsSync(old)) fs.unlink(old, () => {});
-      }
-      recs[idx].pdfKey = req.file.filename;
-      recs[idx].active = true;
-      recs[idx].updatedAt = Date.now();
-    } else {
-      recs.push({ id: crypto.randomUUID(), nationalId, serial, pdfKey: req.file.filename, active: true, createdAt: Date.now() });
-    }
-    saveRecords(recs);
-    return res.json({ ok: true });
-  } catch (e) {
-    if (req.file) fs.unlink(path.join(STORAGE_DIR, req.file.filename), () => {});
-    return res.status(500).json({ error: e.message });
-  }
-});
-
-// حذف مستخدم
-app.post('/delete-user', (req, res) => {
-  const nationalId = normalize(req.body?.id || req.body?.nationalId || req.body?.nid);
-  const serial     = normalize(req.body?.serial || req.body?.certificatenumber);
-
-  if (!nationalId || !serial) return res.status(400).json({ error: 'بيانات ناقصة' });
-
-  const recs = loadRecords();
-  const idx  = recs.findIndex(r => r.nationalId === nationalId && r.serial === serial && r.active);
-  if (idx < 0) return res.json({ ok: true });
-
-  const fileAbs = path.join(STORAGE_DIR, path.basename(recs[idx].pdfKey || ''));
-  if (fs.existsSync(fileAbs)) fs.unlink(fileAbs, () => {});
-  recs.splice(idx, 1);
-  saveRecords(recs);
-  res.json({ ok: true });
-});
-
-/* ========== Static ========== */
-const STATIC_DIR = path.join(__dirname, 'public');
-app.use(express.static(STATIC_DIR));
-
-app.get('/', (req, res) => res.sendFile(path.join(STATIC_DIR, 'index.html')));
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/') || req.path.startsWith('/files/')) return next();
-  const idx = path.join(STATIC_DIR, 'index.html');
-  if (fs.existsSync(idx)) return res.sendFile(idx);
-  return res.status(404).send('Not found');
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log('Dashboard backend running on', PORT, 'serving', STATIC_DIR));
