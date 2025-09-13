@@ -44,7 +44,8 @@ document.getElementById("verifyForm").onsubmit = async function(e) {
 
   if (result.exists) {
     // يفتح ملف الـ PDF في نافذة جديدة
-    window.open(result.downloadUrl, "_blank");
+const base = window.location.origin; 
+window.open(base + result.downloadUrl, "_blank");
   } else {
     alert("❌ البيانات غير صحيحة أو الوثيقة غير موجودة");
   }
