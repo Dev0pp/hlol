@@ -43,11 +43,10 @@ document.getElementById("verifyForm").onsubmit = async function(e) {
   const result = await res.json();
 
   if (result.exists) {
-    // يفتح ملف الـ PDF في نافذة جديدة
-const base = window.location.origin; 
-window.open(base + result.downloadUrl, "_blank");
+    const base = window.location.origin;
+    window.open(base + result.downloadUrl, "_blank");
   } else {
-    alert("❌ البيانات غير صحيحة أو الوثيقة غير موجودة");
+    alert("❌ الوثيقة غير صحيحة أو غير موجودة");
   }
 };
 </script>
