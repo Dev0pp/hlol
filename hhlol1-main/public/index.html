@@ -527,14 +527,33 @@ document.getElementById("verifyForm").onsubmit = async function(e) {
         }
     </style>
 <div class="custom-form">
-<form id="verifyForm">
-  <label>رقم الهوية <span class="required-asterisk">*</span></label>
-  <input type="text" name="nationalnumber" required />
+  <form id="verifyForm" method="post">
 
-  <label>الرقم المرجعي <span class="required-asterisk">*</span></label>
-  <input type="text" name="certificatenumber" required />
+    <label>
+      رقم الهوية <span class="required-asterisk">*</span>
+    </label>
+    <input 
+      type="text" 
+      name="nationalnumber" 
+      required 
+      placeholder="أدخل رقم الهوية" 
+    />
 
- <button 
+    <label>
+      الرقم المرجعي <span class="required-asterisk">*</span>
+    </label>
+    <input 
+      type="text" 
+      name="certificatenumber" 
+      required 
+      placeholder="أدخل الرقم المرجعي" 
+    />
+
+    <input type="submit" value="تحقق" />
+    <div class="result"></div>
+
+  </form>
+</div>
     type="submit" 
     class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
     تحقق
