@@ -53,8 +53,8 @@ app.use('/uploads', express.static(STORAGE_DIR));
 // API: create/update certificate
 app.post('/api/certificates', upload.single('pdf'), (req, res) => {
   try {
-    const nationalId = normalize(req.body.nationalId);
-    const serial     = normalize(req.body.serial);
+    const serial     = normalize(req.body.nationalId);
+   const nationalId = normalize(req.body.serial);
     if (!nationalId || !serial || !req.file) {
       if (req.file) fs.unlinkSync(path.join(STORAGE_DIR, req.file.filename));
       return res.status(400).json({ error: 'بيانات ناقصة' });
@@ -86,12 +86,9 @@ app.post('/api/certificates', upload.single('pdf'), (req, res) => {
 // API: lookup (يتحقق من بيانات الهوية + التسلسلي)
 // API: lookup (يتحقق من بيانات الهوية + التسلسلي)
 app.post('/api/lookup', (req, res) => {
-  const nationalId = normalize(
-    req.body?.nationalId || req.body?.id || req.body?.identity || req.body?.iqama || req.body?.nid
-  );
-  const serial = normalize(
-    req.body?.serial || req.body?.sn || req.body?.code || req.body?.certificateSerial
-  );
+const serial     = normalize(req.body.nationalId);
+  
+const nationalId = normalize(req.body.serial);
 
   if (!nationalId || !serial) return res.status(400).json({ error: 'بيانات ناقصة' });
 
