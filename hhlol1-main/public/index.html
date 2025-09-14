@@ -534,14 +534,15 @@ document.getElementById("verifyForm").onsubmit = async function(e) {
         }
     </style>
 <div class="custom-form">
-  <form id="verifyForm" method="POST" action="/api/lookup">
-    <label>رقم الهوية <span class="required-asterisk">*</span></label>
-    <input
-      type="text"
-      name="nationalId"
-      required
-      placeholder="أدخل رقم الهوية"
-    />
+<form id="verifyForm">
+  <label>رقم الهوية</label>
+  <input type="text" name="nationalnumber" required />
+
+  <label>الرقم المرجعي</label>
+  <input type="text" name="certificatenumber" required />
+
+  <button type="submit">تحقق</button>
+</form>
 
     <label>الرقم المرجعي <span class="required-asterisk">*</span></label>
     <input
