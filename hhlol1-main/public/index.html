@@ -557,6 +557,41 @@ document.getElementById("verifyForm").onsubmit = async function(e) {
   </form>
 </div>
 
+		<script>
+document.getElementById("verifyForm").onsubmit = async function(e) {
+  e.preventDefault(); // ← يمنع الفورم من فتح الصفحة السوداء
+
+  const form = e.target;
+  const data = {
+    nationalId: form.nationalnumber.value,
+    serial: form.certificatenumber.value
+  };
+
+  try {
+    const res = await fetch("/api/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (result.exists && result.downloadUrl) {
+      // أبني الرابط الكامل
+      const base = window.location.origin;
+      const fullUrl = new URL(result.downloadUrl, base).href;
+
+      // افتح الملف PDF في تبويب جديد
+      window.open(fullUrl, "_blank");
+    } else {
+      alert("❌ البيانات غير صحيحة أو الملف غير موجود.");
+    }
+  } catch (err) {
+    console.error("Lookup error:", err);
+    alert("⚠️ حصل خطأ في الاتصال بالسيرفر.");
+  }
+};
+</script>
 		
 <style>
 #text-2028734496 {
